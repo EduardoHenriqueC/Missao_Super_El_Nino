@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EcoAlerta: Missão Super El Niño</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        * { box-sizing: border-box; user-select: none; }
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #1a1a2e; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex; justify-content: center; align-items: center; overflow: hidden;
+        }
+        
+        #game-wrapper {
+            position: relative; width: 100%; max-width: 960px; aspect-ratio: 16/9;
+            background: #000; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+
+        canvas { width: 100%; height: 100%; display: block; }
+
+        /* Interface (HUD) */
+        #hud {
+            position: absolute; top: 15px; left: 20px; right: 20px;
+            display: flex; justify-content: space-between; z-index: 5;
+            color: white; font-size: 1.2rem; font-weight: bold; text-shadow: 2px 2px 0 #000;
+            pointer-events: none; opacity: 0; transition: opacity 0.3s;
+        }
+
+        /* Overlays / Modais */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.95); display: none; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center;
+            color: #fff; z-index: 10; padding: 20px;
+        }
+        .overlay.active { display: flex; }
+        
+        h1 { color: #f1c40f; font-size: 2.5rem; margin-bottom: 10px; text-shadow: 3px 3px 0 #d35400; line-height: 1.1; }
+        h2 { color: #3498db; font-size: 1.8rem; margin-bottom: 15px; }
+        p { font-size: 1.2rem; max-width: 650px; line-height: 1.5; margin-bottom: 25px; }
+        
+        .btn-container { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; }
+        
+        button {
+            padding: 15px 35px; font-size: 1.2rem; font-weight: 800; border: none; border-radius: 12px;
+            cursor: pointer; transition: transform 0.1s, filter 0.2s; color: white;
+            box-shadow: 0 6px 0 rgba(0,0,0,0.3); text-transform: uppercase; letter-spacing: 1px;
+        }
+        button:active { transform: translateY(6px); box-shadow: none; }
+        button:hover { filter: brightness(1.1); }
+        
+        .btn-start { background: #2ecc71; box-shadow: 0 6px 0 #27ae60; }
+        .btn-fato { background: #3498db; box-shadow: 0 6px 0 #2980b9; }
+        .btn-fake { background: #e74c3c; box-shadow: 0 6px 0 #c0392b; }
+
+        /* Controles Mobile */
+        #mobile-controls {
+            position: absolute; bottom: 15px; left: 0; width: 100%;
+            display: none; justify-content: space-between; padding: 0 20px; z-index: 6; pointer-events: none;
+        }
+        .ctrl-btn {
+            width: 65px; height: 65px; background: rgba(255,255,255,0.2); border: 3px solid rgba(255,255,255,0.5);
+            border-radius: 50%; color: white; font-size: 28px; display: flex; justify-content: center;
+            align-items: center; pointer-events: auto; touch-action: manipulation; backdrop-filter: blur(4px);
+        }
+        .ctrl-btn:active { background: rgba(255,255,255,0.5); }
+        .left-right { display: flex; gap: 15px; }
+        
+        @media (max-width: 768px) { #mobile-controls { display: flex; } }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <div id="hud">
+        <span id="score-display">Pontos: 0</span>
+        <span id="status-display">Fase 1</span>
+    </div>
+
+    <!-- Tela Inicial -->
+    <div id="screen-start" class="overlay active">
+        <h1>EcoAlerta:<br>Missão Super El Niño</h1>
+        <p>O Super El Niño está alterando o clima! Ajude a proteger a cidade das secas extremas e das enchentes devastadoras.</p>
+        <p><strong>Controles:</strong> Setas / W-A-D ou Botões na tela.<br>Pular: Espaço ou Botão ⭡</p>
+        <button class="btn-start" onclick="startGame()">Começar Missão</button>
+    </div>
+
+    <!-- Modal Quiz -->
+    <div id="screen-quiz" class="overlay">
+        <h2 id="quiz-title">Fato ou Fake?</h2>
+        <p id="quiz-question"></p>
+        <div class="btn-container">
+            <button class="btn-fato" onclick="answerQuiz(true)">FATO</button>
+            <button class="btn-fake" onclick="answerQuiz(false)">FAKE</button>
+        </div>
+    </div>
+
+    <!-- Modal Feedback Quiz -->
+    <div id="screen-feedback" class="overlay">
+        <h1 id="feedback-title"></h1>
+        <p id="feedback-desc"></p>
+        <button class="btn-start" onclick="nextPhase()">Continuar Missão</button>
+    </div>
+
+    <!-- Tela Vitória -->
+    <div id="screen-win" class="overlay">
+        <h1>Missão Cumprida!</h1>
+        <h2>Você é um Guardião do Clima!</h2>
+        <p id="final-stats"></p>
+        <p style="font-size: 0.9rem; color: #f1c40f;">🌟 Alinhado à BNCC: Impactos das Mudanças Climáticas</p>
+        <button class="btn-start" onclick="location.reload()">Jogar Novamente</button>
+    </div>
+
+    <!-- Controles Mobile -->
+    <div id="mobile-controls">
+        <div class="left-right">
+            <div class="ctrl-btn" id="btn-left">⭠</div>
+            <div class="ctrl-btn" id="btn-right">⭢</div>
+        </div>
+        <div class="ctrl-btn" id="btn-jump">⭡</div>
+    </div>
+</div>
+
+<script>
+/**
+ * SISTEMA DE ÁUDIO (Web Audio API)
+ * Gera sons sintéticos sem arquivos externos
+ */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSFX(type) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+
+    if (type === 'jump') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.exponentialRampToValueAtTime(400, now + 0.1);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now); osc.stop(now + 0.1);
+    } else if (type === 'collect') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.1);
+        osc.start(now); osc.stop(now + 0.1);
+    } else if (type === 'success') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.setValueAtTime(600, now + 0.1);
+        osc.frequency.setValueAtTime(800, now + 0.2);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.4);
+        osc.start(now); osc.stop(now + 0.4);
+    } else if (type === 'error') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.linearRampToValueAtTime(100, now + 0.3);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.3);
+        osc.start(now); osc.stop(now + 0.3);
+    } else if (type === 'win') {
+        osc.type = 'square';
+        [400, 500, 600, 800].forEach((freq, i) => {
+            osc.frequency.setValueAtTime(freq, now + i*0.15);
+        });
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.8);
+        osc.start(now); osc.stop(now + 0.8);
+    }
+}
+
+/**
+ * VARIÁVEIS GLOBAIS DE ESTADO
+ */
+const gameState = {
+    score: 0,
+    timeElapsed: 0,
+    currentPhase: 1,
+    activeQuiz: null
+};
+
+// Controles virtuais
+const inputState = { left: false, right: false, jump: false };
+const bindTouch = (id, key) => {
+    const el = document.getElementById(id);
+    const press = (e) => { e.preventDefault(); inputState[key] = true; };
+    const release = (e) => { e.preventDefault(); inputState[key] = false; };
+    el.addEventListener('touchstart', press); el.addEventListener('mousedown', press);
+    el.addEventListener('touchend', release); el.addEventListener('mouseup', release);
+    el.addEventListener('mouseleave', release);
+};
+bindTouch('btn-left', 'left'); bindTouch('btn-right', 'right'); bindTouch('btn-jump', 'jump');
+
+/**
+ * PHASER 3: CLASSES DAS CENAS
+ */
+class BootScene extends Phaser.Scene {
+    constructor() { super('Boot'); }
+    create() {
+        // Geração Procedural de Assets usando Graphics
+        const g = this.add.graphics();
+        
+        // Jogador (Quadrado Azul)
+        g.fillStyle(0x3498db); g.fillRoundedRect(0, 0, 32, 32, 6); g.generateTexture('player', 32, 32); g.clear();
+        // Plataforma
+        g.fillStyle(0x7f8c8d); g.fillRect(0, 0, 200, 20); g.generateTexture('platform', 200, 20); g.clear();
+        // Plataforma Curta
+        g.fillStyle(0x7f8c8d); g.fillRect(0, 0, 100, 20); g.generateTexture('platform_short', 100, 20); g.clear();
+        // Balde de Água (Extintor)
+        g.fillStyle(0x2980b9); g.fillRect(4, 4, 16, 20); g.fillStyle(0xbdc3c7); g.fillRect(10, 0, 4, 4); g.generateTexture('bucket', 24, 24); g.clear();
+        // Fogo
+        g.fillStyle(0xe74c3c); g.beginPath(); g.moveTo(12, 0); g.lineTo(24, 24); g.lineTo(0, 24); g.closePath(); g.fill(); 
+        g.fillStyle(0xf1c40f); g.beginPath(); g.moveTo(12, 8); g.lineTo(20, 24); g.lineTo(4, 24); g.closePath(); g.fill(); g.generateTexture('fire', 24, 24); g.clear();
+        // Árvore
+        g.fillStyle(0x795548); g.fillRect(12, 16, 8, 16); g.fillStyle(0x2ecc71); g.fillCircle(16, 12, 12); g.generateTexture('tree', 32, 32); g.clear();
+        // Saco de Lixo
+        g.fillStyle(0x2c3e50); g.fillCircle(12, 14, 10); g.fillStyle(0x34495e); g.fillTriangle(12, 0, 6, 10, 18, 10); g.generateTexture('trash', 24, 24); g.clear();
+        // Gota (Partícula)
+        g.fillStyle(0x3498db); g.fillCircle(4, 4, 4); g.generateTexture('drop', 8, 8); g.clear();
+
+        this.scene.start('Level1');
+        this.scene.sleep('Level1'); // Aguarda clique em começar
+    }
+}
+
+class Level1Scene extends Phaser.Scene {
+    constructor() { super('Level1'); }
+    
+    create() {
+        this.cameras.main.setBackgroundColor('#d35400'); // Céu Seco
+        this.timer = 45;
+        this.inventory = 0;
+        this.firesExtinguished = 0;
+
+        // Física e Plataformas
+        this.platforms = this.physics.add.staticGroup();
+        this.platforms.create(480, 520, 'platform').setScale(5, 2).refreshBody(); // Chão
+        this.platforms.create(200, 400, 'platform_short');
+        this.platforms.create(750, 320, 'platform');
+        this.platforms.create(150, 220, 'platform');
+        this.platforms.create(500, 150, 'platform_short');
+
+        // Player
+        this.player = this.physics.add.sprite(100, 450, 'player');
+        this.player.setBounce(0.1);
+        this.player.setCollideWorldBounds(true);
+        this.physics.add.collider(this.player, this.platforms);
+
+        // Coletáveis (Baldes)
+        this.buckets = this.physics.add.staticGroup();
+        this.buckets.create(200, 370, 'bucket');
+        this.buckets.create(750, 290, 'bucket');
+        this.buckets.create(150, 190, 'bucket');
+        this.buckets.create(500, 120, 'bucket');
+
+        // Focos de Incêndio
+        this.fires = this.physics.add.staticGroup();
+        this.fires.create(400, 460, 'fire');
+        this.fires.create(800, 460, 'fire');
+        this.fires.create(250, 200, 'fire');
+        this.fires.create(700, 300, 'fire');
+
+        // Colisões
+        this.physics.add.overlap(this.player, this.buckets, this.collectBucket, null, this);
+        this.physics.add.overlap(this.player, this.fires, this.extinguishFire, null, this);
+
+        // Controles Teclado
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keys = this.input.keyboard.addKeys('W,A,D,SPACE');
+
+        // Timer Loop
+        this.timeEvent = this.time.addEvent({ delay: 1000, callback: this.updateTime, callbackScope: this, loop: true });
+        
+        updateHUD(`Tempo: ${this.timer}s | Focos Apagados: 0/4`);
+    }
+
+    update() {
+        if (!this.player.active) return;
+
+        // Movimento
+        if (this.cursors.left.isDown || this.keys.A.isDown || inputState.left) {
+            this.player.setVelocityX(-200);
+        } else if (this.cursors.right.isDown || this.keys.D.isDown || inputState.right) {
+            this.player.setVelocityX(200);
+        } else {
+            this.player.setVelocityX(0);
+        }
+
+        // Pulo
+        if ((this.cursors.up.isDown || this.keys.W.isDown || this.keys.SPACE.isDown || inputState.jump) && this.player.body.touching.down) {
+            this.player.setVelocityY(-400);
+            playSFX('jump');
+        }
+    }
+
+    updateTime() {
+        this.timer--;
+        gameState.timeElapsed++;
+        updateHUD(`Tempo: ${this.timer}s | Baldes: ${this.inventory} | Apagados: ${this.firesExtinguished}/4`);
+        if (this.timer <= 0) {
+            playSFX('error');
+            this.scene.restart(); // Timeout = restart
+        }
+    }
+
+    collectBucket(player, bucket) {
+        bucket.disableBody(true, true);
+        this.inventory++;
+        playSFX('collect');
+        updateHUD(`Tempo: ${this.timer}s | Baldes: ${this.inventory} | Apagados: ${this.firesExtinguished}/4`);
+    }
+
+    extinguishFire(player, fire) {
+        if (this.inventory > 0) {
+            this.inventory--;
+            fire.disableBody(true, true);
+            this.add.image(fire.x, fire.y, 'tree'); // Brota árvore
+            this.firesExtinguished++;
+            gameState.score += 50;
+            playSFX('success');
+            
+            updateHUD(`Tempo: ${this.timer}s | Baldes: ${this.inventory} | Apagados: ${this.firesExtinguished}/4`);
+
+            if (this.firesExtinguished === 4) {
+                this.timeEvent.remove();
+                this.scene.pause();
+                triggerQuiz(1);
+            }
+        }
+    }
+}
+
+class Level2Scene extends Phaser.Scene {
+    constructor() { super('Level2'); }
+    
+    create() {
+        this.cameras.main.setBackgroundColor('#2c3e50'); // Céu Chuvoso
+        this.trashCollected = 0;
+        
+        // Efeito de Chuva
+        const particles = this.add.particles(0, 0, 'drop', {
+            x: { min: 0, max: 960 }, y: 0, lifespan: 2000, speedY: { min: 200, max: 400 },
+            scale: { start: 1, end: 0 }, quantity: 2, blendMode: 'ADD'
+        });
+
+        // Água subindo (Enchente)
+        this.water = this.add.rectangle(0, 540, 960, 0, 0x2980b9, 0.7).setOrigin(0, 1);
+        this.physics.add.existing(this.water);
+        this.water.body.setAllowGravity(false);
+
+        // Plataformas
+        this.platforms = this.physics.add.staticGroup();
+        this.platforms.create(480, 520, 'platform').setScale(5, 2).refreshBody(); // Chão
+        this.platforms.create(150, 420, 'platform_short');
+        this.platforms.create(400, 320, 'platform_short');
+        this.platforms.create(750, 250, 'platform_short');
+        this.platforms.create(100, 180, 'platform');
+        this.platforms.create(800, 100, 'platform');
+
+        // Player
+        this.player = this.physics.add.sprite(50, 450, 'player');
+        this.player.setBounce(0.1);
+        this.player.setCollideWorldBounds(true);
+        this.physics.add.collider(this.player, this.platforms);
+
+        // Lixos nos bueiros/ruas
+        this.trashes = this.physics.add.staticGroup();
+        this.trashes.create(150, 390, 'trash');
+        this.trashes.create(400, 290, 'trash');
+        this.trashes.create(750, 220, 'trash');
+        this.trashes.create(100, 150, 'trash');
+        this.trashes.create(800, 70, 'trash');
+
+        this.physics.add.overlap(this.player, this.trashes, this.collectTrash, null, this);
+
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keys = this.input.keyboard.addKeys('W,A,D,SPACE');
+        
+        // Aumenta tempo total no fundo
+        this.timeEvent = this.time.addEvent({ delay: 1000, callback: () => gameState.timeElapsed++, loop: true });
+        
+        updateHUD(`Bueiros desentupidos: 0/5 | Água subindo!`);
+    }
+
+    update() {
+        if (!this.player.active) return;
+
+        // Movimento
+        if (this.cursors.left.isDown || this.keys.A.isDown || inputState.left) {
+            this.player.setVelocityX(-200);
+        } else if (this.cursors.right.isDown || this.keys.D.isDown || inputState.right) {
+            this.player.setVelocityX(200);
+        } else {
+            this.player.setVelocityX(0);
+        }
+        if ((this.cursors.up.isDown || this.keys.W.isDown || this.keys.SPACE.isDown || inputState.jump) && this.player.body.touching.down) {
+            this.player.setVelocityY(-400);
+            playSFX('jump');
+        }
+
+        // Lógica da Água Subindo
+        this.water.height += 0.35; // Velocidade da enchente
+        this.water.body.setSize(960, this.water.height);
+        
+        // Se a água atingir o jogador = Game Over
+        if (this.player.y > 540 - this.water.height) {
+            playSFX('error');
+            this.scene.restart();
+        }
+    }
+
+    collectTrash(player, trash) {
+        trash.disableBody(true, true);
+        this.trashCollected++;
+        this.water.height = Math.max(0, this.water.height - 35); // Drenagem
+        gameState.score += 50;
+        playSFX('collect');
+        
+        updateHUD(`Bueiros desentupidos: ${this.trashCollected}/5 | Água descendo!`);
+
+        if (this.trashCollected === 5) {
+            this.scene.pause();
+            triggerQuiz(2);
+        }
+    }
+}
+
+/**
+ * CONFIGURAÇÃO DO PHASER
+ */
+const config = {
+    type: Phaser.AUTO,
+    parent: 'game-wrapper',
+    width: 960,
+    height: 540,
+    physics: { default: 'arcade', arcade: { gravity: { y: 600 }, debug: false } },
+    scene: [BootScene, Level1Scene, Level2Scene],
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }
+};
+const game = new Phaser.Game(config);
+
+/**
+ * INTEGRAÇÃO HTML E REGRAS DE NEGÓCIO (QUIZZES)
+ */
+const quizzes = {
+    1: {
+        question: "Em períodos de calor extremo e seca, jogar bituca de cigarro ou lixo no mato seco não tem perigo de causar incêndio.",
+        correct: false,
+        feedbackCorrect: "Exato! O mato seco queima muito rápido com qualquer faísca. Prevenção é tudo!",
+        feedbackWrong: "Atenção! Em épocas de seca, uma simples faísca gera grandes incêndios."
+    },
+    2: {
+        question: "O lixo descartado incorretamente nas ruas entope os bueiros e agrava as enchentes quando chove forte.",
+        correct: true,
+        feedbackCorrect: "Exato! Manter as calçadas limpas garante que a água da chuva escoe sem alagar casas!",
+        feedbackWrong: "Atenção! Lixo nas ruas bloqueia a drenagem e causa desastres nas enchentes."
+    }
+};
+
+function hideAllScreens() { document.querySelectorAll('.overlay').forEach(el => el.classList.remove('active')); }
+
+function updateHUD(text) {
+    document.getElementById('status-display').innerText = text;
+    document.getElementById('score-display').innerText = `Pontos: ${gameState.score}`;
+}
+
+function startGame() {
+    playSFX('collect');
+    hideAllScreens();
+    document.getElementById('hud').style.opacity = 1;
+    game.scene.wake('Level1');
+}
+
+function triggerQuiz(phaseId) {
+    gameState.activeQuiz = quizzes[phaseId];
+    document.getElementById('quiz-question').innerText = gameState.activeQuiz.question;
+    hideAllScreens();
+    document.getElementById('screen-quiz').classList.add('active');
+}
+
+function answerQuiz(isFato) {
+    const isCorrect = (isFato === gameState.activeQuiz.correct);
+    if (isCorrect) {
+        gameState.score += 100;
+        playSFX('success');
+        document.getElementById('feedback-title').innerText = "Resposta Correta! (+100 pts)";
+        document.getElementById('feedback-title').style.color = "#2ecc71";
+        document.getElementById('feedback-desc').innerText = gameState.activeQuiz.feedbackCorrect;
+    } else {
+        playSFX('error');
+        document.getElementById('feedback-title').innerText = "Resposta Incorreta!";
+        document.getElementById('feedback-title').style.color = "#e74c3c";
+        document.getElementById('feedback-desc').innerText = gameState.activeQuiz.feedbackWrong;
+    }
+    
+    hideAllScreens();
+    document.getElementById('screen-feedback').classList.add('active');
+}
+
+function nextPhase() {
+    hideAllScreens();
+    if (gameState.currentPhase === 1) {
+        gameState.currentPhase = 2;
+        game.scene.stop('Level1');
+        game.scene.start('Level2');
+    } else {
+        showWinScreen();
+    }
+}
+
+function showWinScreen() {
+    playSFX('win');
+    document.getElementById('hud').style.opacity = 0;
+    
+    let stars = 1;
+    if (gameState.score >= 300) stars = 2;
+    if (gameState.score === 500) stars = 3; // Pontuação Máxima
+    
+    const starStr = '⭐'.repeat(stars);
+    document.getElementById('final-stats').innerHTML = `
+        Tempo de Missão: ${gameState.timeElapsed} segundos<br>
+        Pontuação Final: ${gameState.score} pontos<br><br>
+        Classificação: ${starStr}
+    `;
+    
+    document.getElementById('screen-win').classList.add('active');
+}
+</script>
+</body>
+</html>
