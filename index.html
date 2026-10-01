@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Guardiões do Clima</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            background: #12202b
+        }
+
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center
+        }
+
+        canvas {
+            width: min(100vw, 177.7vh);
+            height: auto;
+            aspect-ratio: 16/9;
+            touch-action: none
+        }
+    </style>
+</head>
+
+<body><canvas id="c" width="960" height="540"></canvas>
+    <script>
+        const C = document.getElementById('c'), X = C.getContext('2d'), W = 960, H = 540, FONT = 'Verdana,Arial,sans-serif';
+        let S = 'menu', L, keys = {}, pressed = {}, btns = [], fade = 1, T = 0, AC, P = [], FT = [], card = 0, G = { seeds: 0, leaks: 0, trees: 0, trash: 0, drains: 0, gardens: 0 };
+        const K = { l: ['ArrowLeft', 'KeyA'], r: ['ArrowRight', 'KeyD'], j: ['ArrowUp', 'KeyW', 'Space'], a: ['KeyE', 'Enter', 'KeyF'] };
+        const held = k => K[k].some(c => keys[c]), press = k => K[k].some(c => pressed[c]);
+        addEventListener('keydown', e => { if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault(); if (!keys[e.code]) pressed[e.code] = 1; keys[e.code] = 1 });
+        addEventListener('keyup', e => keys[e.code] = 0);
+        C.addEventListener('pointerdown', e => { const r = C.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height; for (const b of btns) if (x > b.x && x < b.x + b.w && y > b.y && y < b.y + b.h) { b.f(); break } });
+        function snd(f, d = .12, t = 'square', v = .06, s = 0) { try { AC = AC || new AudioContext(); const n = AC.currentTime, o = AC.createOscillator(), g = AC.createGain(); o.type = t; o.frequency.setValueAtTime(f, n); if (s) o.frequency.linearRampToValueAtTime(f + s, n + d); g.gain.setValueAtTime(v, n); g.gain.exponentialRampToValueAtTime(.001, n + d); o.connect(g); g.connect(AC.destination); o.start(); o.stop(n + d) } catch (e) { } }
+        const sSeed = () => { snd(660, .08, 'triangle', .08, 300) }, sFix = () => { snd(300, .1, 'square', .06, 200); setTimeout(() => snd(600, .15, 'triangle', .07), 90) }, sPlant = () => { [400, 500, 650, 800].forEach((f, i) => setTimeout(() => snd(f, .15, 'triangle', .08), i * 80)) }, sCool = () => snd(900, .2, 'sine', .05, -300), sBad = () => snd(150, .3, 'sawtooth', .06, -80), sThunder = () => snd(70, .8, 'sawtooth', .1, -40);
+        function go(s) { S = s; fade = 1 }
+        function txt(s, x, y, sz, col = '#fff', al = 'center', ol = '#0008') { X.font = 'bold ' + sz + 'px ' + FONT; X.textAlign = al; X.textBaseline = 'middle'; if (ol) { X.lineWidth = Math.max(3, sz / 6); X.strokeStyle = ol; X.lineJoin = 'round'; X.strokeText(s, x, y) } X.fillStyle = col; X.fillText(s, x, y) }
+        function rr(x, y, w, h, r, f, s) { X.beginPath(); X.roundRect(x, y, w, h, r); if (f) { X.fillStyle = f; X.fill() } if (s) { X.strokeStyle = s; X.lineWidth = 3; X.stroke() } }
+        function btn(t, x, y, w, h, fn, col = '#27ae60') { btns.push({ x, y, w, h, f: fn }); rr(x, y + 5, w, h, 16, '#0006'); rr(x, y, w, h, 16, col, '#fff'); txt(t, x + w / 2, y + h / 2, Math.min(30, h * .5), '#fff') }
+        function wrap(s, x, y, mw, sz, col, lh) { X.font = 'bold ' + sz + 'px ' + FONT; let l = '', yy = y; for (const w of s.split(' ')) { const t = l ? l + ' ' + w : w; if (X.measureText(t).width > mw) { txt(l, x, yy, sz, col, 'center', null); l = w; yy += lh } else l = t } txt(l, x, yy, sz, col, 'center', null) }
+        function burst(x, y, c, n = 12, g = 300) { for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, s = 60 + Math.random() * 140; P.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 80, l: .7, m: .7, c, g, r: 3 + Math.random() * 3 }) } }
+        function ft(s, x, y, c = '#fff') { FT.push({ s, x, y, l: 1.4, c }) }
+        function updFx(dt) { for (const p of P) { p.l -= dt; p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt } P = P.filter(p => p.l > 0); for (const f of FT) { f.l -= dt; f.y -= 30 * dt } FT = FT.filter(f => f.l > 0) }
+        function drawFx() { for (const p of P) { X.globalAlpha = Math.max(0, p.l / p.m); X.fillStyle = p.c; X.beginPath(); X.arc(p.x, p.y, p.r, 0, 7); X.fill() } X.globalAlpha = 1; for (const f of FT) { X.globalAlpha = Math.min(1, f.l); txt(f.s, f.x, f.y, 20, f.c); X.globalAlpha = 1 } }
+        /* ---------- personagem ---------- */
+        function drawP(p, t) {
+            const b = p.on && Math.abs(p.vx) > 1 ? Math.sin(t * 16) * 2 : 0, x = p.x + 14, y = p.y + b; X.save(); X.translate(x, y); X.scale(p.d, 1);
+            X.fillStyle = '#0003'; X.beginPath(); X.ellipse(0, 36 - b, 14, 4, 0, 0, 7); X.fill();
+            rr(-12, 14, 24, 22, 8, '#2980b9', '#fff'); rr(-9, 34, 7, 6 + (Math.sin(t * 16) > 0 && b ? 2 : 0), 3, '#34495e'); rr(2, 34, 7, 6 + (Math.sin(t * 16) < 0 && b ? 2 : 0), 3, '#34495e');
+            X.fillStyle = '#ffd9b3'; X.beginPath(); X.arc(0, 8, 13, 0, 7); X.fill(); X.strokeStyle = '#fff'; X.lineWidth = 2; X.stroke();
+            X.fillStyle = '#27ae60'; X.beginPath(); X.ellipse(-2, -4, 15, 7, 0, Math.PI, 0); X.fill(); X.fillStyle = '#2ecc71'; X.beginPath(); X.ellipse(6, -9, 9, 4, -.6, 0, 7); X.fill();
+            X.fillStyle = '#222'; X.beginPath(); X.arc(5, 8, 2.5, 0, 7); X.arc(-3, 8, 2.5, 0, 7); X.fill(); X.restore();
+            if (p.carry > 0) { txt('🗑️' + p.carry, x, p.y - 14, 18) }
+        }
+        function phys(p, dt, plats, sp) {
+            const m = (held('r') ? 1 : 0) - (held('l') ? 1 : 0); p.vx = m * sp; if (m) p.d = m;
+            if (held('j') && p.on) { p.vy = -580; p.on = 0; snd(400, .1, 'square', .04, 300) }
+            const pb = p.y + 36; p.vy += 1500 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.on = 0;
+            if (p.y + 36 >= 460) { p.y = 424; p.vy = 0; p.on = 1 }
+            for (const q of plats) if (p.vy >= 0 && pb <= q.y + 3 && p.y + 36 >= q.y && p.x + 24 > q.x && p.x < q.x + q.w) { p.y = q.y - 36; p.vy = 0; p.on = 1 }
+            p.x = Math.max(0, Math.min(L.w - 28, p.x)); L.cx += ((p.x - W / 2 + 14) - L.cx) * Math.min(1, dt * 6); L.cx = Math.max(0, Math.min(L.w - W, L.cx))
+        }
+        const near = (x, r = 55) => Math.abs(L.p.x + 14 - x) < r;
+        function bar(x, y, w, v, col, lab, ic) { rr(x, y, w, 22, 11, '#0007', '#fff'); if (v > 0) rr(x + 2, y + 2, Math.max(18, (w - 4) * Math.min(1, v)), 18, 9, col); txt(ic + ' ' + lab, x + w / 2, y + 11, 15, '#fff') }
+        function chip(x, y, w, t) { rr(x, y, w, 34, 17, '#0008', '#fff'); txt(t, x + w / 2, y + 17, 18) }
+        /* ---------- FASE 1 ---------- */
+        function init1() {
+            P = []; FT = []; G = { seeds: 0, leaks: 0, trees: 0, trash: 0, drains: 0, gardens: 0 };
+            L = {
+                n: 1, w: 2600, cx: 0, t: 0, p: { x: 80, y: 424, vx: 0, vy: 0, on: 1, d: 1, heat: 15 }, seedN: 0, fixed: 0, planted: 0, win: 0, shade: 0,
+                seeds: [300, 520, 780, 1000, 1300, 1580, 1900, 2200].map((x, i) => ({ x, y: i % 3 == 1 ? 365 : 430, got: 0 })),
+                leaks: [450, 900, 1450, 2050].map(x => ({ x, f: 0, tm: 0 })), spots: [650, 1150, 1700, 2300, 2500].map(x => ({ x, d: 0 })), trees: []
+            }; go('p1')
+        }
+        function upd1(dt) {
+            const p = L.p; L.t += dt; phys(p, dt, [], p.heat >= 100 ? 110 : 230);
+            for (const s of L.seeds) if (!s.got && near(s.x, 30) && p.y > 360) { s.got = 1; L.seedN++; G.seeds++; sSeed(); burst(s.x, s.y, '#8bc34a', 10); ft('+1 semente', s.x, s.y - 20, '#c5e1a5') }
+            let hint = null;
+            for (const l of L.leaks) { if (!l.f) { l.tm -= dt; if (l.tm <= 0) { l.tm = .12; P.push({ x: l.x + 22, y: 385, vx: 20, vy: 0, l: .9, m: .9, c: '#4fc3f7', g: 500, r: 3 }) } if (near(l.x, 50)) hint = 'E: fechar vazamento'; if (near(l.x, 50) && press('a')) { l.f = 1; L.fixed++; G.leaks++; sFix(); burst(l.x, 400, '#4fc3f7', 16); ft('Vazamento fechado!', l.x, 360, '#81d4fa') } } }
+            for (const s of L.spots) if (!s.d && near(s.x, 45)) { if (L.seedN > 0) { hint = 'E: plantar semente'; if (press('a')) { s.d = 1; L.seedN--; L.planted++; G.trees++; L.trees.push({ x: s.x, g: 0 }); sPlant(); burst(s.x, 440, '#66bb6a', 20); ft('Árvore plantada!', s.x, 330, '#a5d6a7') } } else hint = 'Colete sementes 🌰' }
+            L.hint = hint; let sh = 0; for (const t of L.trees) { t.g = Math.min(1, t.g + dt * .9); if (Math.abs(p.x + 14 - t.x) < 150 * t.g) sh = 1 }
+            if (sh && !L.shade) { sCool(); ft('Temperatura reduzida!', p.x + 14, p.y - 20, '#80deea') } L.shade = sh;
+            p.heat = Math.max(0, Math.min(100, p.heat + (sh ? -20 : 5) * dt)); if (sh && Math.random() < .3) P.push({ x: p.x + 14 + (Math.random() - .5) * 30, y: p.y + 30, vx: 0, vy: -60, l: .7, m: .7, c: '#80deea', g: 0, r: 3 });
+            updFx(dt); if (L.planted >= 5 && L.fixed >= 4 && !L.win) L.win = 1.4; if (L.win) { L.win -= dt; if (L.win <= 0) { card = 0; go('card') } }
+        }
+        function draw1() {
+            const t = L.t, g = X.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#ff8a2b'); g.addColorStop(.6, '#ffd27a'); g.addColorStop(1, '#f9e6b3'); X.fillStyle = g; X.fillRect(0, 0, W, H);
+            X.fillStyle = '#fff3b0'; X.beginPath(); X.arc(790, 100, 48 + Math.sin(t * 2) * 3, 0, 7); X.fill(); X.strokeStyle = '#fff3b0'; X.lineWidth = 5; for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6 + t * .3; X.beginPath(); X.moveTo(790 + Math.cos(a) * 62, 100 + Math.sin(a) * 62); X.lineTo(790 + Math.cos(a) * 88, 100 + Math.sin(a) * 88); X.stroke() }
+            X.fillStyle = '#d98a4a'; X.beginPath(); X.moveTo(0, 460); for (let i = 0; i <= 8; i++)X.lineTo(i * 160 - (L.cx * .3 % 160), i % 2 ? 340 : 400); X.lineTo(W + 200, 460); X.fill();
+            X.strokeStyle = '#fff6'; X.lineWidth = 2; for (let i = 0; i < 4; i++) { X.beginPath(); for (let x = 0; x <= W; x += 20)X.lineTo(x, 430 + i * 8 + Math.sin(x / 30 + t * 3 + i) * 3); X.stroke() }
+            X.save(); X.translate(-L.cx, 0); X.fillStyle = '#c68642'; X.fillRect(0, 460, L.w, 80); X.fillStyle = '#a8692c'; X.fillRect(0, 460, L.w, 6); X.strokeStyle = '#8a5522'; X.lineWidth = 2; for (let x = 20; x < L.w; x += 75) { X.beginPath(); X.moveTo(x, 480); X.lineTo(x + 18, 495); X.lineTo(x + 4, 520); X.stroke() }
+            for (const x of [200, 560, 1000, 1400, 1850, 2400]) { X.strokeStyle = '#6d4c2a'; X.lineWidth = 8; X.beginPath(); X.moveTo(x, 460); X.lineTo(x, 380); X.moveTo(x, 410); X.lineTo(x + 28, 380); X.moveTo(x, 395); X.lineTo(x - 24, 368); X.stroke() }
+            for (const s of L.spots) if (!s.d) { X.setLineDash([8, 6]); X.strokeStyle = '#fff'; X.lineWidth = 3; X.beginPath(); X.ellipse(s.x, 458, 38, 9, 0, 0, 7); X.stroke(); X.setLineDash([]); txt('🌱', s.x, 438 + Math.sin(t * 4) * 3, 24, '#fff', null) }
+            for (const l of L.leaks) { X.fillStyle = '#7f8c8d'; X.fillRect(l.x, 400, 16, 60); X.fillRect(l.x, 400, 40, 14); X.fillStyle = '#95a5a6'; X.fillRect(l.x + 30, 408, 14, 14); if (l.f) { txt('✅', l.x + 8, 375, 26) } else { X.fillStyle = '#4fc3f755'; X.beginPath(); X.ellipse(l.x + 28, 458, 18 + Math.sin(t * 3) * 3, 5, 0, 0, 7); X.fill(); txt('💧', l.x + 8, 372 + Math.sin(t * 5) * 3, 24, '#fff', null) } }
+            for (const tr of L.trees) {
+                const gg = tr.g, e = 1 - Math.pow(1 - gg, 3), r = 150 * e; X.fillStyle = 'rgba(0,70,90,.2)'; X.beginPath(); X.ellipse(tr.x, 460, r, Math.max(1, 75 * e), 0, Math.PI, 0); X.fill(); X.strokeStyle = '#80deea'; X.lineWidth = 3; X.setLineDash([10, 8]); X.stroke(); X.setLineDash([]); X.fillStyle = 'rgba(0,40,60,.18)'; X.beginPath(); X.ellipse(tr.x, 462, r, 10 * e, 0, 0, 7); X.fill()
+                const sw = Math.sin(t * 2 + tr.x) * 3 * e; X.fillStyle = '#795548'; X.fillRect(tr.x - 8 * e, 460 - 95 * e, 16 * e, 95 * e); X.fillStyle = '#2e9e4f'; for (const [dx, dy, rad] of [[-28, -100, 38], [28, -100, 38], [0, -130, 46]]) { X.beginPath(); X.arc(tr.x + dx * e + sw, 460 + dy * e, rad * e, 0, 7); X.fill() } X.fillStyle = '#43c463'; X.beginPath(); X.arc(tr.x + sw, 460 - 135 * e, 30 * e, 0, 7); X.fill()
+            }
+            for (const s of L.seeds) if (!s.got) { const y = s.y + Math.sin(t * 4 + s.x) * 4; X.fillStyle = '#fff6'; X.beginPath(); X.arc(s.x, y, 17, 0, 7); X.fill(); X.fillStyle = '#6d4c2a'; X.beginPath(); X.ellipse(s.x, y + 3, 9, 6, 0, 0, 7); X.fill(); X.fillStyle = '#4caf50'; X.beginPath(); X.ellipse(s.x + 3, y - 6, 6, 3, -.7, 0, 7); X.fill() }
+            drawP(L.p, t); if (L.hint) txt(L.hint, L.p.x + 14, L.p.y - 34, 18, '#fff'); drawFx(); X.restore();
+            const h = L.p.heat / 100; bar(20, 14, 300, h, h > .7 ? '#e53935' : h > .4 ? '#fb8c00' : '#43a047', 'Calor ' + Math.round(h * 100) + '%', '🌡️'); chip(335, 10, 150, '🌰 Sementes: ' + L.seedN); chip(500, 10, 150, '💧 Vazamentos: ' + L.fixed + '/4'); chip(665, 10, 150, '🌳 Árvores: ' + L.planted + '/5');
+            if (h >= 1) txt('Muito calor! Procure uma sombra 🌳', W / 2, 70, 24, '#ff5252');
+            txt('Objetivo: plante 5 árvores e feche 4 vazamentos', W / 2, 515, 18, '#fff')
+        }
+        /* ---------- FASE 2 ---------- */
+        function init2() {
+            P = []; FT = [];
+            L = {
+                n: 2, w: 2000, cx: 0, t: 0, p: { x: 60, y: 424, vx: 0, vy: 0, on: 1, d: 1, carry: 0 }, lvl: 30, flash: 0, nf: 5, over: 0, win: 0,
+                plats: [[250, 380, 120], [460, 320, 120], [700, 375, 140], [960, 330, 130], [1200, 375, 140], [1450, 320, 120], [1700, 375, 120]].map(a => ({ x: a[0], y: a[1], w: a[2] })),
+                trash: [[300, 350], [500, 290], [420, 430], [740, 345], [1000, 300], [1240, 345]].map(a => ({ x: a[0] + 10, y: a[1] - 15, got: 0 })),
+                drains: [620, 1120, 1620].map(x => ({ x, o: 0, n: 0 })), gardens: [880, 1400].map(x => ({ x, a: 0 })), clouds: Array.from({ length: 8 }, (_, i) => ({ x: i * 260, y: 20 + (i % 3) * 30 }))
+            }; go('p2')
+        }
+        function upd2(dt) {
+            const p = L.p, wl = 20 + L.lvl * 1.15; L.t += dt; if (L.over || L.win) { L.win && (L.win -= dt, L.win <= 0 && (card = 1, go('card'))); if (L.over && press('a')) init2(); updFx(dt); return }
+            phys(p, dt, L.plats, p.y + 36 > 540 - wl + 8 ? 150 : 230);
+            for (const s of L.trash) if (!s.got && near(s.x, 28) && Math.abs(p.y + 18 - s.y) < 34) { s.got = 1; p.carry++; G.trash++; sSeed(); burst(s.x, s.y, '#ffb74d', 8); ft('Lixo recolhido!', s.x, s.y - 20, '#ffe082') }
+            let hint = null; for (const d of L.drains) if (!d.o && near(d.x, 60)) { if (p.carry >= 2) { hint = 'E: desobstruir bueiro'; if (press('a')) { p.carry -= 2; d.o = 1; G.drains++; L.lvl = Math.max(0, L.lvl - 8); sFix(); burst(d.x, 455, '#4fc3f7', 20); ft('Bueiro livre! Água escoando', d.x, 380, '#81d4fa') } } else hint = 'Leve 2 lixos 🗑️ ao bueiro (' + p.carry + '/2)' }
+            const od = L.drains.filter(d => d.o).length; for (const g of L.gardens) if (!g.a && near(g.x, 70)) { if (od > 0) { hint = 'E: direcionar água ao jardim'; if (press('a')) { g.a = 1; G.gardens++; L.lvl = Math.max(0, L.lvl - 10); sPlant(); burst(g.x, 445, '#66bb6a', 20); ft('Jardim de chuva ativado!', g.x, 380, '#a5d6a7') } } else hint = 'Desobstrua um bueiro primeiro' }
+            L.hint = hint; const ga = L.gardens.filter(g => g.a).length; L.lvl = Math.max(0, L.lvl + (0.7 - .2 * od - .1 * ga) * dt);
+            if (L.lvl >= 100) { L.over = 1; sBad() } if (od == 3 && ga == 2) { L.win = 1.6 }
+            L.nf -= dt; if (L.nf <= 0) { L.flash = 1; sThunder(); L.nf = 5 + Math.random() * 5 } L.flash = Math.max(0, L.flash - dt * 2);
+            for (let i = 0; i < 4; i++)P.push({ x: L.cx + Math.random() * (W + 100), y: -5, vx: -60, vy: 500, l: .8, m: .8, c: '#cfe8ffaa', g: 300, r: 1.5 });
+            for (const c of L.clouds) c.x = (c.x + dt * 20) % (L.w + 300); updFx(dt)
+        }
+        function house(x, c) { X.fillStyle = c; X.fillRect(x, 360, 110, 100); X.fillStyle = '#5d4037'; X.beginPath(); X.moveTo(x - 10, 360); X.lineTo(x + 55, 310); X.lineTo(x + 120, 360); X.fill(); X.fillStyle = '#ffe082'; X.fillRect(x + 15, 385, 26, 26); X.fillRect(x + 70, 385, 26, 26); X.fillStyle = '#4e342e'; X.fillRect(x + 44, 420, 22, 40) }
+        function draw2() {
+            const t = L.t, g = X.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#2c3e50'); g.addColorStop(1, '#7f98aa'); X.fillStyle = g; X.fillRect(0, 0, W, H);
+            X.fillStyle = '#37474f'; for (const c of L.clouds) { const x = c.x - L.cx * .4; for (const o of [0, 50, 100]) X.beginPath(), X.arc(x + o, c.y + 20, 45, 0, 7), X.fill() }
+            X.save(); X.translate(-L.cx, 0); for (const [i, x] of [100, 520, 980, 1420, 1860].entries()) house(x, ['#ef9a9a', '#fff59d', '#90caf9', '#a5d6a7', '#ce93d8'][i]);
+            X.fillStyle = '#455a64'; X.fillRect(0, 460, L.w, 80); X.fillStyle = '#78909c'; X.fillRect(0, 460, L.w, 8);
+            for (const q of L.plats) { rr(q.x, q.y, q.w, 14, 4, '#8d6e63', '#4e342e') }
+            for (const gd of L.gardens) { X.fillStyle = gd.a ? '#2e9e4f' : '#6b7f5a'; X.beginPath(); X.ellipse(gd.x, 460, 65, 28, 0, Math.PI, 0); X.fill(); for (let i = -2; i <= 2; i++)txt(gd.a ? '🌷' : '🌾', gd.x + i * 22, 440 + Math.abs(i) * 4, 20, '#fff', null); if (gd.a) txt('💧', gd.x, 405 + Math.sin(t * 4) * 4, 20, '#fff', null) }
+            for (const d of L.drains) { X.fillStyle = '#263238'; X.fillRect(d.x - 34, 452, 68, 10); if (!d.o) { for (const [dx, c] of [[-18, '#ef5350'], [0, '#42a5f5'], [16, '#fdd835']]) { X.fillStyle = c; X.beginPath(); X.ellipse(d.x + dx, 448, 12, 9, 0, 0, 7); X.fill() } } else { X.strokeStyle = '#4fc3f7'; X.lineWidth = 3; X.beginPath(); X.arc(d.x, 456, 14 + Math.sin(t * 6) * 3, 0, 5); X.stroke() } }
+            for (const gd of L.gardens) if (gd.a) { const d = L.drains.filter(d => d.o).sort((a, b) => Math.abs(a.x - gd.x) - Math.abs(b.x - gd.x))[0]; if (d) { X.strokeStyle = '#4fc3f7'; X.lineWidth = 5; X.setLineDash([14, 10]); X.lineDashOffset = -t * 60 * Math.sign(gd.x - d.x); X.beginPath(); X.moveTo(d.x, 452); X.lineTo(gd.x, 452); X.stroke(); X.setLineDash([]) } }
+            for (const s of L.trash) if (!s.got) { const y = s.y + Math.sin(t * 4 + s.x) * 3; X.fillStyle = '#fff6'; X.beginPath(); X.arc(s.x, y, 17, 0, 7); X.fill(); txt('🥤', s.x, y, 24, '#fff', null) }
+            drawP(L.p, t); if (L.hint) txt(L.hint, L.p.x + 14, L.p.y - 34, 18, '#fff');
+            const wl = 20 + L.lvl * 1.15, wy = 540 - wl; X.fillStyle = 'rgba(50,140,210,.62)'; X.beginPath(); X.moveTo(L.cx - 10, 540); for (let x = L.cx - 10; x <= L.cx + W + 10; x += 20)X.lineTo(x, wy + Math.sin(x / 40 + t * 3) * 4); X.lineTo(L.cx + W + 10, 540); X.fill();
+            drawFx(); X.restore();
+            if (L.flash > 0) { X.fillStyle = 'rgba(255,255,255,' + L.flash * .7 + ')'; X.fillRect(0, 0, W, H) }
+            const v = L.lvl / 100; bar(20, 14, 280, v, v > .75 ? '#e53935' : '#29b6f6', 'Água ' + Math.round(v * 100) + '%', '🌊');
+            chip(315, 10, 150, '🗑️ Lixo: ' + G.trash + '/6'); chip(480, 10, 150, '🕳️ Bueiros: ' + G.drains + '/3'); chip(645, 10, 170, '🌿 Jardins: ' + G.gardens + '/2');
+            if (v > .75) txt('⚠️ A água está chegando às casas!', W / 2, 70, 22, '#ffeb3b');
+            txt('Pule nas plataformas, recolha lixo e desobstrua os bueiros', W / 2, 515, 18, '#fff');
+            if (L.over) { X.fillStyle = '#000a'; X.fillRect(0, 0, W, H); txt('A água chegou às casas! 🏠', W / 2, 200, 40); btn('TENTAR DE NOVO', 300, 260, 360, 64, init2, '#e67e22') }
+        }
+        /* ---------- telas ---------- */
+        function scenery(side) {
+            const t = T;
+            if (side == 0) {
+                const g = X.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#ff8a2b'); g.addColorStop(1, '#ffd27a'); X.fillStyle = g; X.fillRect(0, 0, W, H); X.fillStyle = '#fff3b0'; X.beginPath(); X.arc(170, 110, 50, 0, 7); X.fill(); X.strokeStyle = '#fff3b0'; X.lineWidth = 5; for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6 + t * .3; X.beginPath(); X.moveTo(170 + Math.cos(a) * 64, 110 + Math.sin(a) * 64); X.lineTo(170 + Math.cos(a) * 90, 110 + Math.sin(a) * 90); X.stroke() }
+                X.fillStyle = '#c68642'; X.fillRect(0, 430, W, 110); X.strokeStyle = '#6d4c2a'; X.lineWidth = 9; X.beginPath(); X.moveTo(120, 430); X.lineTo(120, 340); X.moveTo(120, 375); X.lineTo(155, 345); X.moveTo(120, 360); X.lineTo(90, 335); X.stroke()
+            }
+            else {
+                const g = X.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#263238'); g.addColorStop(1, '#607d8b'); X.fillStyle = g; X.fillRect(0, 0, W, H); X.fillStyle = '#37474f'; for (const [x, y] of [[620, 70], [760, 110], [880, 60]]) { for (const o of [0, 45, 90]) X.beginPath(), X.arc(x + o - 30, y, 38, 0, 7), X.fill() }
+                house(640, '#90caf9'); house(800, '#a5d6a7'); X.fillStyle = '#455a64'; X.fillRect(0, 440, W, 100); X.fillStyle = 'rgba(50,140,210,.7)'; X.beginPath(); X.moveTo(0, 540); for (let x = 0; x <= W; x += 20)X.lineTo(x, 430 + Math.sin(x / 40 + t * 3) * 5); X.lineTo(W, 540); X.fill(); X.strokeStyle = '#cfe8ff'; X.lineWidth = 2; for (let i = 0; i < 40; i++) { const x = (i * 47 + t * 120) % W, y = (i * 83 + t * 500) % 420; X.beginPath(); X.moveTo(x, y); X.lineTo(x - 6, y + 16); X.stroke() }
+            }
+        }
+        function menuBg() {
+            X.save(); X.beginPath(); X.moveTo(0, 0); X.lineTo(560, 0); X.lineTo(400, H); X.lineTo(0, H); X.clip(); scenery(0); X.restore(); X.save(); X.beginPath(); X.moveTo(560, 0); X.lineTo(W, 0); X.lineTo(W, H); X.lineTo(400, H); X.clip(); scenery(1); X.restore(); X.strokeStyle = '#fff'; X.lineWidth = 6; X.beginPath(); X.moveTo(560, 0); X.lineTo(400, H); X.stroke();
+            if (Math.sin(T * 1.3) > .97) { X.fillStyle = '#fff6'; X.fillRect(560, 0, 400, H) }
+        }
+        function drawMenu() {
+            menuBg(); rr(130, 40, 700, 150, 28, '#0a1a2add', '#fff'); txt('GUARDIÕES', W / 2, 95, 62, '#ffd54f'); txt('DO CLIMA', W / 2, 150, 50, '#4dd0e1'); txt('Pequenas ações, grandes impactos!', W / 2, 225, 26, '#fff');
+            drawP({ x: W / 2 - 14, y: 300 + Math.sin(T * 4) * 4, vx: 0, vy: 0, on: 0, d: 1, carry: 0 }, T); btn('▶ JOGAR', 300, 370, 360, 70, () => { G = { seeds: 0, leaks: 0, trees: 0, trash: 0, drains: 0, gardens: 0 }; init1() }); btn('? COMO JOGAR', 300, 455, 360, 60, () => go('how'), '#2980b9');
+            txt('☀️ Seca e calor', 150, 505, 20); txt('Tempestade 🌧️', 810, 505, 20)
+        }
+        function drawHow() {
+            menuBg(); X.fillStyle = '#0a1a2ae6'; rr(110, 40, 740, 460, 28, '#0a1a2aee', '#fff'); txt('COMO JOGAR', W / 2, 85, 38, '#ffd54f');
+            const l = ['⬅️ ➡️  ou  A / D  →  andar', '⬆️  ou  W / Espaço  →  pular', 'E  ou  Enter  →  interagir / plantar / fechar / desobstruir', '', 'FASE 1: colete sementes 🌰, feche vazamentos 💧 e plante', 'árvores 🌳. A sombra reduz o seu calor!', '', 'FASE 2: recolha lixo 🥤, desobstrua bueiros (2 lixos cada)', 'e ative os jardins de chuva 🌷 antes que a água suba!'];
+            l.forEach((s, i) => txt(s, W / 2, 140 + i * 34, i < 3 ? 21 : 20, '#fff', 'center', null)); btn('VOLTAR', 350, 430, 260, 56, () => go('menu'), '#e67e22')
+        }
+        const CARDS = [['Áreas com vegetação podem ajudar a reduzir o calor local e também contribuem para a conservação da água e do solo.'], ['Jardins de chuva e outras áreas verdes ajudam a absorver e armazenar parte da água da chuva, contribuindo para reduzir o escoamento superficial.']];
+        function drawCard() {
+            const k = card; X.fillStyle = k ? '#455a64' : '#c0732a'; X.fillRect(0, 0, W, H); rr(150, 40, 660, 460, 28, '#fffdf5', '#ffd54f'); X.save(); X.beginPath(); X.roundRect(180, 70, 600, 200, 18); X.clip();
+            if (!k) { const g = X.createLinearGradient(0, 70, 0, 270); g.addColorStop(0, '#ff9a3c'); g.addColorStop(1, '#ffe0a0'); X.fillStyle = g; X.fillRect(180, 70, 600, 200); X.fillStyle = '#fff3b0'; X.beginPath(); X.arc(700, 120, 34, 0, 7); X.fill(); X.fillStyle = '#c68642'; X.fillRect(180, 230, 600, 40); X.fillStyle = 'rgba(0,70,90,.25)'; X.beginPath(); X.ellipse(480, 232, 150, 70, 0, Math.PI, 0); X.fill(); X.fillStyle = '#795548'; X.fillRect(472, 150, 16, 82); X.fillStyle = '#2e9e4f'; for (const [x, y, r] of [[450, 150, 38], [510, 150, 38], [480, 120, 44]]) X.beginPath(), X.arc(x, y, r, 0, 7), X.fill(); txt('🌡️ ↓', 300, 150, 40, '#fff', null) }
+            else { const g = X.createLinearGradient(0, 70, 0, 270); g.addColorStop(0, '#455a64'); g.addColorStop(1, '#90a4ae'); X.fillStyle = g; X.fillRect(180, 70, 600, 200); X.fillStyle = '#37474f'; for (const o of [0, 60, 120, 180]) X.beginPath(), X.arc(380 + o, 95, 40, 0, 7), X.fill(); X.strokeStyle = '#cfe8ff'; X.lineWidth = 2; for (let i = 0; i < 30; i++) { const x = 180 + (i * 53 + T * 100) % 600, y = 110 + (i * 71 + T * 400) % 150; X.beginPath(); X.moveTo(x, y); X.lineTo(x - 5, y + 14); X.stroke() } X.fillStyle = '#2e9e4f'; X.beginPath(); X.ellipse(620, 262, 110, 45, 0, Math.PI, 0); X.fill(); for (let i = -2; i <= 2; i++)txt('🌷', 620 + i * 30, 235, 26, '#fff', null); X.strokeStyle = '#4fc3f7'; X.lineWidth = 6; X.setLineDash([14, 10]); X.lineDashOffset = -T * 60; X.beginPath(); X.moveTo(220, 255); X.lineTo(520, 255); X.stroke(); X.setLineDash([]); txt('💧➡️', 460, 215, 34, '#fff', null) }
+            X.restore(); txt('VOCÊ SABIA?', W / 2, 310, 38, '#e67e22', 'center', '#fff'); wrap(CARDS[k][0], W / 2, 355, 580, 21, '#1b2a38', 30);
+            btn('Continuar', 350, 430, 260, 56, () => { if (k == 0) init2(); else go('end') })
+        }
+        function drawEnd() {
+            const g = X.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#26c6da'); g.addColorStop(1, '#66bb6a'); X.fillStyle = g; X.fillRect(0, 0, W, H); for (let i = 0; i < 40; i++) { X.fillStyle = ['#ffd54f', '#ef5350', '#fff', '#7e57c2'][i % 4]; X.fillRect((i * 97) % W, (i * 61 + T * 90) % H, 8, 12) }
+            rr(150, 30, 660, 480, 28, '#0a1a2ae6', '#ffd54f'); txt('Parabéns, Guardião do Clima!', W / 2, 85, 36, '#ffd54f'); drawP({ x: W / 2 - 14, y: 115 + Math.sin(T * 5) * 5, vx: 0, vy: 0, on: 0, d: 1, carry: 0 }, T);
+            [['🌰 Sementes coletadas', G.seeds], ['💧 Vazamentos corrigidos', G.leaks], ['🌳 Árvores plantadas', G.trees], ['🥤 Lixo plástico recolhido', G.trash], ['🕳️ Bueiros desobstruídos', G.drains], ['🌷 Jardins de chuva ativados', G.gardens]].forEach((r, i) => { txt(r[0], 260, 200 + i * 36, 21, '#fff', 'left', null); txt(String(r[1]), 700, 200 + i * 36, 24, '#ffd54f', 'right', null) });
+            wrap('Ações de preservação ambiental podem contribuir para reduzir vulnerabilidades aos impactos climáticos.', W / 2, 430, 560, 19, '#fff', 26); btn('JOGAR DE NOVO', 330, 458, 300, 44, () => go('menu'), '#e67e22')
+        }
+        function update(dt) { T += dt; if (S == 'menu' && press('a')) init1(); else if (S == 'how' && press('a')) go('menu'); else if (S == 'card' && press('a')) { card == 0 ? init2() : go('end') } else if (S == 'end' && press('a')) go('menu'); else if (S == 'p1') upd1(dt); else if (S == 'p2') upd2(dt) }
+        function render() { X.setLineDash([]); X.globalAlpha = 1; if (S == 'menu') drawMenu(); else if (S == 'how') drawHow(); else if (S == 'card') drawCard(); else if (S == 'end') drawEnd(); else if (S == 'p1') draw1(); else if (S == 'p2') draw2() }
+        let last = 0; function loop(ts) { const dt = Math.min(.033, (ts - last) / 1000 || 0); last = ts; btns = []; update(dt); render(); if (fade > 0) { X.fillStyle = 'rgba(0,0,0,' + fade + ')'; X.fillRect(0, 0, W, H); fade = Math.max(0, fade - dt * 2.5) } pressed = {}; requestAnimationFrame(loop) }
+        requestAnimationFrame(loop);
+    </script>
+</body>
+
+</html>
