@@ -3,36 +3,70 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Guardiões do Clima</title>
     <style>
         html,
         body {
             margin: 0;
-            height: 100%;
+            padding: 0;
+            width: 100vw;
+            height: 100dvh;
             background: #12202b;
             overflow: hidden;
             touch-action: none;
-        }
-
-        body {
             display: flex;
             align-items: center;
-            justify-content: center
+            justify-content: center;
         }
 
         canvas {
-            width: min(100vw, 177.7vh);
-            height: auto;
-            aspect-ratio: 16/9;
+            width: 100vw;
+            height: 56.25vw;
+            max-height: 100dvh;
+            max-width: 177.78dvh;
+            margin: auto;
+            display: block;
             touch-action: none;
             user-select: none;
             -webkit-user-select: none;
+        }
+
+        #orientacao {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100dvh;
+            background: #12202b;
+            z-index: 9999;
+            color: #fff;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: Verdana, Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .rotate-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+            animation: rotatePhone 2s infinite ease-in-out;
+        }
+
+        @keyframes rotatePhone {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(-90deg); }
+            100% { transform: rotate(-90deg); }
         }
     </style>
 </head>
 
 <body>
+    <div id="orientacao">
+        <div class="rotate-icon">📱</div>
+        <h2>Gire seu celular para jogar na horizontal</h2>
+    </div>
     <canvas id="c" width="960" height="540"></canvas>
     <script>
         const C = document.getElementById('c'), X = C.getContext('2d'), W = 960, H = 540, FONT = 'Verdana,Arial,sans-serif';
@@ -43,13 +77,35 @@
 
         let touches = {};
         const getTouch = e => { const r = C.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
-        C.addEventListener('pointerdown', e => { const p = getTouch(e); touches[e.pointerId] = p; for (const b of btns) if (p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h) { b.f(); break } });
+        
+        let fsRequested = false;
+        C.addEventListener('pointerdown', e => { 
+            if (isTouch && !fsRequested) {
+                fsRequested = true;
+                if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{});
+            }
+            const p = getTouch(e); touches[e.pointerId] = p; 
+            for (const b of btns) if (p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h) { b.f(); break } 
+        });
+
+        function checkOrientation() {
+            if (isTouch && window.innerHeight > window.innerWidth) {
+                document.getElementById('orientacao').style.display = 'flex';
+                C.style.display = 'none';
+            } else {
+                document.getElementById('orientacao').style.display = 'none';
+                C.style.display = 'block';
+            }
+        }
+        window.addEventListener('resize', checkOrientation);
+        window.addEventListener('orientationchange', checkOrientation);
+        checkOrientation();
         C.addEventListener('pointermove', e => { if (touches[e.pointerId]) touches[e.pointerId] = getTouch(e); });
         C.addEventListener('pointerup', e => delete touches[e.pointerId]);
         C.addEventListener('pointercancel', e => delete touches[e.pointerId]);
         C.addEventListener('pointerout', e => delete touches[e.pointerId]);
 
-        const vBtn = [{ k: 'l', x: 80, y: 460, r: 40, ic: '◀' }, { k: 'r', x: 180, y: 460, r: 40, ic: '▶' }, { k: 'a', x: W - 180, y: 460, r: 40, ic: 'E' }, { k: 'j', x: W - 80, y: 460, r: 40, ic: '⬆' }];
+        const vBtn = [{ k: 'l', x: 100, y: 440, r: 45, ic: '◀' }, { k: 'r', x: 220, y: 440, r: 45, ic: '▶' }, { k: 'a', x: W - 220, y: 440, r: 45, ic: 'E' }, { k: 'j', x: W - 100, y: 440, r: 45, ic: '⬆' }];
         let vheld = {}, vpress = {}, lastVheld = {};
         function updTouch() {
             if (!isTouch) return;
